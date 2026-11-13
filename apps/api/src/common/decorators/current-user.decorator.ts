@@ -1,14 +1,22 @@
 import { createParamDecorator, ExecutionContext } from '@nestjs/common';
-import type { FastifyRequest } from 'fastify';
-import type { User } from '@supabase/supabase-js';
 
+/**
+ * Extracts the authenticated user (or a specific property) from the request object.
+ * The SupabaseAuthGuard attaches the JWT payload to `req.user`.
+ *
+ * Usage:
+ *   @CurrentUser()           → full user payload
+ *   @CurrentUser('id')       → user.sub || user.id
+ *   @CurrentUser('email')    → user.email
+ */
 export const CurrentUser = createParamDecorator(
-  (data: keyof User | undefined, ctx: ExecutionContext) => {
-    const request = ctx.switchToHttp().getRequest<FastifyRequest & { user?: User }>();
+  (property: string | undefined, ctx: ExecutionContext) => {
+    const request = ctx.switchToHttp().getRequest();
     const user = request.user;
-    if (!user) {
-      return null;
-    }
-    return data ? user[data] : user;
+
+    if (!user) return null;
+    if (property === 'id') return user.sub || user.id;
+    if (property) return user[property] ?? null;
+    return user;
   },
 );

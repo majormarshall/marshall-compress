@@ -1,109 +1,74 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
-  UploadCloud,
-  LayoutGrid,
-  List,
-  FolderPlus,
-  Search,
-  Filter,
-  RefreshCw,
-  HardDrive,
-  Sparkles,
+  HardDrive, FolderPlus, Upload, RefreshCw, Grid3X3,
+  List, Search, ChevronRight, Home,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
-import { FolderBreadcrumb } from '@/components/cloud/FolderBreadcrumb';
+import { Skeleton } from '@/components/ui/skeleton';
 import { UploadDropzone } from '@/components/cloud/UploadDropzone';
 import { FileGrid } from '@/components/cloud/FileGrid';
-import { useFiles, useFolders, useDeleteFile, useCreateFolder } from '@/lib/hooks/useFiles';
-import type { FileItem, FolderItem } from '@marshall/shared';
+import { FolderBreadcrumb } from '@/components/cloud/FolderBreadcrumb';
+import { useFiles } from '@/lib/hooks/useFiles';
+import { useFolders, useCreateFolder } from '@/lib/hooks/useFolders';
 import { toast } from 'sonner';
 
-export default function CloudStoragePage() {
+export default function CloudPage() {
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
-  const [folderHistory, setFolderHistory] = useState<Array<{ id: string; name: string }>>([]);
-  const [view, setView] = useState<'grid' | 'list'>('grid');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [showUploadZone, setShowUploadZone] = useState(false);
-  const [isCreatingFolder, setIsCreatingFolder] = useState(false);
-  const [newFolderName, setNewFolderName] = useState('');
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [search, setSearch] = useState('');
+  const [showUpload, setShowUpload] = useState(false);
+  const [folderPath, setFolderPath] = useState<Array<{ id: string; name: string }>>([]);
 
-  // Fetch real queries
   const { data: filesData, isLoading: filesLoading, refetch: refetchFiles } = useFiles({
     folderId: currentFolderId,
-    search: searchQuery || undefined,
+    search: search || undefined,
   });
-
-  const { data: foldersData, isLoading: foldersLoading, refetch: refetchFolders } = useFolders(currentFolderId);
-  const deleteFileMutation = useDeleteFile();
+  const { data: folders, refetch: refetchFolders } = useFolders(currentFolderId);
   const createFolderMutation = useCreateFolder();
 
-  const files: FileItem[] = filesData?.files || [];
-  const folders: FolderItem[] = foldersData || [];
+  const files = filesData?.files || [];
+  const total = filesData?.total || 0;
 
-  const handleNavigate = (targetId: string | null) => {
-    if (targetId === null) {
+  const handleFolderOpen = (folderId: string, folderName: string) => {
+    setFolderPath(prev => [...prev, { id: folderId, name: folderName }]);
+    setCurrentFolderId(folderId);
+  };
+
+  const handleBreadcrumbNav = (folderId: string | null) => {
+    if (folderId === null) {
+      setFolderPath([]);
       setCurrentFolderId(null);
-      setFolderHistory([]);
-      return;
-    }
-    const index = folderHistory.findIndex((f) => f.id === targetId);
-    if (index !== -1) {
-      setFolderHistory(folderHistory.slice(0, index + 1));
-      setCurrentFolderId(targetId);
-    }
-  };
-
-  const handleFolderClick = (folder: FolderItem) => {
-    setCurrentFolderId(folder.id);
-    setFolderHistory([...folderHistory, { id: folder.id, name: folder.name }]);
-  };
-
-  const handleDeleteFile = async (file: FileItem) => {
-    if (confirm(`Are you sure you want to delete "${file.name}"?`)) {
-      try {
-        await deleteFileMutation.mutateAsync(file.id);
-        toast.success(`Deleted ${file.name}`);
-      } catch {
-        toast.error('Failed to delete file');
-      }
-    }
-  };
-
-  const handleDownloadFile = (file: FileItem) => {
-    if (file.storage_url) {
-      window.open(file.storage_url, '_blank');
     } else {
-      toast.info(`Preparing download for ${file.name}`);
+      const idx = folderPath.findIndex(f => f.id === folderId);
+      setFolderPath(prev => prev.slice(0, idx + 1));
+      setCurrentFolderId(folderId);
     }
   };
 
-  const handleCreateFolder = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newFolderName.trim()) return;
-
+  const handleCreateFolder = async () => {
+    const name = prompt('New folder name:');
+    if (!name?.trim()) return;
     try {
-      await createFolderMutation.mutateAsync({
-        name: newFolderName.trim(),
-        parentId: currentFolderId,
-      });
-      toast.success(`Created folder "${newFolderName}"`);
-      setNewFolderName('');
-      setIsCreatingFolder(false);
+      await createFolderMutation.mutateAsync({ name: name.trim(), parentId: currentFolderId });
+      toast.success(`Folder "${name}" created`);
+      refetchFolders();
     } catch {
       toast.error('Failed to create folder');
     }
   };
 
-  const isLoading = filesLoading || foldersLoading;
+  const handleUploadComplete = useCallback(() => {
+    setShowUpload(false);
+    refetchFiles();
+    toast.success('File uploaded successfully');
+  }, [refetchFiles]);
 
   return (
     <div className="flex flex-col gap-6 p-6 max-w-7xl mx-auto w-full">
-      {/* Top Header */}
+      {/* Page Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 mb-1">
@@ -111,54 +76,66 @@ export default function CloudStoragePage() {
               <HardDrive className="w-5 h-5" />
             </span>
             <h1 className="text-2xl font-bold tracking-tight text-slate-100">Cloud Storage</h1>
-            <Badge variant="cyan" className="ml-2">Secure R2/S3</Badge>
+            <Badge variant="outline" className="ml-2 font-mono text-xs">{total} files</Badge>
           </div>
-          <p className="text-sm text-slate-400">
-            Store, preview, organize, and share all your digital assets with enterprise encryption.
-          </p>
+          <p className="text-sm text-slate-400">Cloudflare R2 object storage with pre-signed secure access.</p>
         </div>
 
-        {/* Action Buttons */}
-        <div className="flex items-center gap-3">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setIsCreatingFolder(!isCreatingFolder)}
-            className="border-white/10"
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => { refetchFiles(); refetchFolders(); }}
+            className="p-2 rounded-xl border border-white/10 bg-slate-900/60 text-slate-400 hover:text-slate-200 transition-colors"
           >
-            <FolderPlus className="w-4 h-4 mr-1.5 text-amber-400" />
-            New Folder
+            <RefreshCw className="w-4 h-4" />
+          </button>
+          <Button variant="outline" size="sm" onClick={handleCreateFolder}>
+            <FolderPlus className="w-4 h-4 mr-1.5 text-amber-400" /> New Folder
           </Button>
-
-          <Button
-            variant={showUploadZone ? 'secondary' : 'default'}
-            size="sm"
-            onClick={() => setShowUploadZone(!showUploadZone)}
-            className="shadow-lg shadow-blue-600/20"
-          >
-            <UploadCloud className="w-4 h-4 mr-1.5" />
-            {showUploadZone ? 'Close Upload' : 'Upload Files'}
+          <Button size="sm" onClick={() => setShowUpload(!showUpload)} className="shadow-lg shadow-blue-600/20">
+            <Upload className="w-4 h-4 mr-1.5" /> Upload
           </Button>
+        </div>
+      </div>
 
-          {/* Grid / List View Toggle */}
-          <div className="flex items-center bg-slate-900/80 p-0.5 rounded-lg border border-white/10">
+      {/* Upload Zone */}
+      {showUpload && (
+        <div className="animate-fadeIn">
+          <UploadDropzone folderId={currentFolderId} onComplete={handleUploadComplete} />
+        </div>
+      )}
+
+      {/* Toolbar: Breadcrumb + Search + View toggle */}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <FolderBreadcrumb path={folderPath} onNavigate={handleBreadcrumbNav} />
+
+        <div className="flex items-center gap-2">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+            <input
+              type="text"
+              placeholder="Search files..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="pl-9 pr-4 py-2 rounded-xl bg-slate-900/60 border border-white/10 text-sm text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-blue-500/50 w-48"
+            />
+          </div>
+          <div className="flex border border-white/10 rounded-xl overflow-hidden">
             <button
               type="button"
-              onClick={() => setView('grid')}
-              className={`p-1.5 rounded-md transition-colors ${
-                view === 'grid' ? 'bg-blue-600/30 text-blue-300' : 'text-slate-400 hover:text-slate-200'
+              onClick={() => setViewMode('grid')}
+              className={`p-2 transition-colors ${
+                viewMode === 'grid' ? 'bg-blue-600/20 text-blue-400' : 'bg-slate-900/60 text-slate-500 hover:text-slate-300'
               }`}
-              title="Grid View"
             >
-              <LayoutGrid className="w-4 h-4" />
+              <Grid3X3 className="w-4 h-4" />
             </button>
             <button
               type="button"
-              onClick={() => setView('list')}
-              className={`p-1.5 rounded-md transition-colors ${
-                view === 'list' ? 'bg-blue-600/30 text-blue-300' : 'text-slate-400 hover:text-slate-200'
+              onClick={() => setViewMode('list')}
+              className={`p-2 transition-colors ${
+                viewMode === 'list' ? 'bg-blue-600/20 text-blue-400' : 'bg-slate-900/60 text-slate-500 hover:text-slate-300'
               }`}
-              title="List View"
             >
               <List className="w-4 h-4" />
             </button>
@@ -166,102 +143,20 @@ export default function CloudStoragePage() {
         </div>
       </div>
 
-      {/* New Folder Modal / Inline Creator */}
-      {isCreatingFolder && (
-        <form
-          onSubmit={handleCreateFolder}
-          className="flex items-center gap-3 p-4 rounded-xl border border-blue-500/30 bg-blue-500/5 backdrop-blur-md animate-fadeIn"
-        >
-          <FolderPlus className="w-5 h-5 text-amber-400 shrink-0" />
-          <input
-            type="text"
-            placeholder="Folder name..."
-            value={newFolderName}
-            onChange={(e) => setNewFolderName(e.target.value)}
-            className="flex-1 bg-slate-950/60 border border-white/15 rounded-lg px-3 py-1.5 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            autoFocus
-          />
-          <Button type="submit" size="sm" loading={createFolderMutation.isPending}>
-            Create
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              setIsCreatingFolder(false);
-              setNewFolderName('');
-            }}
-          >
-            Cancel
-          </Button>
-        </form>
-      )}
-
-      {/* Collapsible Dropzone */}
-      {showUploadZone && (
-        <div className="animate-fadeIn">
-          <UploadDropzone
-            folderId={currentFolderId}
-            onFilesAccepted={() => {
-              refetchFiles();
-            }}
-          />
-        </div>
-      )}
-
-      {/* Navigation Breadcrumbs + Filter Toolbar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <FolderBreadcrumb folders={folderHistory} onNavigate={handleNavigate} />
-
-        <div className="flex items-center gap-2">
-          <div className="relative min-w-[220px]">
-            <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-500" />
-            <input
-              type="text"
-              placeholder="Search files..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-3 py-1.5 text-sm rounded-xl bg-slate-900/60 border border-white/10 text-slate-200 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
-            />
-          </div>
-
-          <button
-            type="button"
-            onClick={() => {
-              refetchFiles();
-              refetchFolders();
-            }}
-            className="p-2 rounded-xl border border-white/10 bg-slate-900/60 text-slate-400 hover:text-slate-200 hover:bg-white/5 transition-colors"
-            title="Refresh"
-          >
-            <RefreshCw className="w-4 h-4" />
-          </button>
-        </div>
-      </div>
-
-      {/* Files & Folders Container */}
-      {isLoading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mt-2">
+      {/* File Grid */}
+      {filesLoading ? (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
           {[...Array(8)].map((_, i) => (
-            <div key={i} className="flex flex-col gap-3 p-4 rounded-2xl border border-white/5 bg-slate-900/30">
-              <Skeleton className="aspect-[16/10] w-full rounded-xl" />
-              <Skeleton className="h-4 w-3/4 rounded" />
-              <div className="flex justify-between">
-                <Skeleton className="h-3 w-1/4 rounded" />
-                <Skeleton className="h-3 w-1/4 rounded" />
-              </div>
-            </div>
+            <Skeleton key={i} className="h-32 rounded-2xl" />
           ))}
         </div>
       ) : (
         <FileGrid
           files={files}
-          folders={folders}
-          view={view}
-          onFolderClick={handleFolderClick}
-          onFileDelete={handleDeleteFile}
-          onFileDownload={handleDownloadFile}
+          folders={folders || []}
+          viewMode={viewMode}
+          onFolderOpen={handleFolderOpen}
+          onRefresh={() => { refetchFiles(); refetchFolders(); }}
         />
       )}
     </div>

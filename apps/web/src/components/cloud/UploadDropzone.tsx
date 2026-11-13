@@ -1,185 +1,199 @@
 'use client';
 
-import React, { useCallback } from 'react';
+import React, { useCallback, useState } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { UploadCloud, CheckCircle2, AlertCircle, X, File, Sparkles } from 'lucide-react';
-import { useUploadStore } from '@/lib/stores/upload.store';
+import { Upload, X, CheckCircle2, AlertCircle, FileIcon, Loader2 } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
+import { filesApi } from '@/lib/api/endpoints';
 import { cn } from '@/lib/utils';
-import { formatBytes } from './FileCard';
 
-export interface UploadDropzoneProps {
-  onFilesAccepted?: (files: File[]) => void;
-  className?: string;
-  folderId?: string | null;
+interface UploadFile {
+  id: string;
+  file: File;
+  status: 'pending' | 'uploading' | 'done' | 'error';
+  progress: number;
+  error?: string;
 }
 
-export function UploadDropzone({ onFilesAccepted, className, folderId }: UploadDropzoneProps) {
-  const { queue, addFiles, updateProgress, setStatus, removeFile, clearCompleted } = useUploadStore();
+export interface UploadDropzoneProps {
+  folderId?: string | null;
+  onComplete?: (files: File[]) => void;
+  maxFiles?: number;
+  maxSizeMb?: number;
+}
 
-  const handleSimulatedUpload = useCallback((files: File[]) => {
-    // When files are dropped, add to store and simulate reactive progress upload
-    addFiles(files);
+export function UploadDropzone({ folderId, onComplete, maxFiles = 20, maxSizeMb = 2048 }: UploadDropzoneProps) {
+  const [uploadQueue, setUploadQueue] = useState<UploadFile[]>([]);
+  const [uploading, setUploading] = useState(false);
 
-    files.forEach((file) => {
-      const generatedId = `${file.name}`;
-      // Simulate incremental upload progress
-      let currentProgress = 0;
-      const interval = setInterval(() => {
-        currentProgress += Math.floor(Math.random() * 20) + 15;
-        if (currentProgress >= 100) {
-          clearInterval(interval);
-          // Find matching queue item
-          const match = useUploadStore.getState().queue.find((q) => q.file.name === file.name && q.status !== 'completed');
-          if (match) {
-            updateProgress(match.id, 100);
-            setStatus(match.id, 'completed');
+  const updateFile = (id: string, patch: Partial<UploadFile>) =>
+    setUploadQueue(prev => prev.map(f => f.id === id ? { ...f, ...patch } : f));
+
+  const uploadFile = async (item: UploadFile) => {
+    updateFile(item.id, { status: 'uploading', progress: 5 });
+    try {
+      // Create upload session
+      const session = await filesApi.createUploadSession({
+        fileName: item.file.name,
+        fileSizeBytes: item.file.size,
+        mimeType: item.file.type || 'application/octet-stream',
+        folderId: folderId || undefined,
+      });
+
+      updateFile(item.id, { progress: 20 });
+
+      // Upload directly to presigned URL
+      const xhr = new XMLHttpRequest();
+      await new Promise<void>((resolve, reject) => {
+        xhr.upload.addEventListener('progress', (e) => {
+          if (e.lengthComputable) {
+            const pct = 20 + Math.round((e.loaded / e.total) * 70);
+            updateFile(item.id, { progress: pct });
           }
-        } else {
-          const match = useUploadStore.getState().queue.find((q) => q.file.name === file.name && q.status !== 'completed');
-          if (match) {
-            setStatus(match.id, 'uploading');
-            updateProgress(match.id, currentProgress);
-          }
-        }
-      }, 250);
-    });
-  }, [addFiles, updateProgress, setStatus]);
+        });
+        xhr.addEventListener('load', () => {
+          if (xhr.status >= 200 && xhr.status < 300) resolve();
+          else reject(new Error(`Upload failed: ${xhr.status}`));
+        });
+        xhr.addEventListener('error', () => reject(new Error('Network error during upload')));
+        xhr.open('PUT', session.uploadUrl);
+        xhr.setRequestHeader('Content-Type', item.file.type || 'application/octet-stream');
+        xhr.send(item.file);
+      });
 
-  const onDrop = useCallback(
-    (acceptedFiles: File[]) => {
-      if (acceptedFiles.length === 0) return;
-      handleSimulatedUpload(acceptedFiles);
-      if (onFilesAccepted) {
-        onFilesAccepted(acceptedFiles);
-      }
-    },
-    [handleSimulatedUpload, onFilesAccepted]
-  );
+      updateFile(item.id, { progress: 95 });
 
-  const { getRootProps, getInputProps, isDragActive, isDragReject } = useDropzone({
+      // Complete upload
+      await filesApi.completeUpload({
+        uploadId: session.uploadId,
+        storageKey: session.storageKey,
+        fileName: item.file.name,
+        fileSizeBytes: item.file.size,
+        mimeType: item.file.type || 'application/octet-stream',
+        folderId: folderId || undefined,
+      });
+
+      updateFile(item.id, { status: 'done', progress: 100 });
+    } catch (err: any) {
+      updateFile(item.id, { status: 'error', error: err.message || 'Upload failed' });
+    }
+  };
+
+  const handleStartUpload = async () => {
+    const pending = uploadQueue.filter(f => f.status === 'pending');
+    if (!pending.length) return;
+    setUploading(true);
+    // Upload 3 at a time
+    const chunks: UploadFile[][] = [];
+    for (let i = 0; i < pending.length; i += 3) chunks.push(pending.slice(i, i + 3));
+    for (const chunk of chunks) {
+      await Promise.all(chunk.map(uploadFile));
+    }
+    setUploading(false);
+    const done = uploadQueue.filter(f => f.status === 'done').map(f => f.file);
+    onComplete?.(done);
+  };
+
+  const onDrop = useCallback((acceptedFiles: File[]) => {
+    const newFiles: UploadFile[] = acceptedFiles.map(f => ({
+      id: `${f.name}-${Date.now()}-${Math.random()}`,
+      file: f,
+      status: 'pending',
+      progress: 0,
+    }));
+    setUploadQueue(prev => [...prev, ...newFiles]);
+  }, []);
+
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
-    multiple: true,
+    maxFiles,
+    maxSize: maxSizeMb * 1024 * 1024,
   });
 
-  const activeUploads = queue.filter((q) => q.status === 'uploading' || q.status === 'pending');
-  const completedUploads = queue.filter((q) => q.status === 'completed');
+  const removeFile = (id: string) => setUploadQueue(prev => prev.filter(f => f.id !== id));
+  const pendingCount = uploadQueue.filter(f => f.status === 'pending').length;
+  const doneCount = uploadQueue.filter(f => f.status === 'done').length;
 
   return (
-    <div className={cn('flex flex-col gap-4', className)}>
+    <div className="flex flex-col gap-4 rounded-2xl border border-white/8 bg-slate-900/60 backdrop-blur-xl p-5">
+      {/* Drop Zone */}
       <div
         {...getRootProps()}
         className={cn(
-          'relative flex flex-col items-center justify-center rounded-2xl border-2 border-dashed p-8 text-center transition-all duration-300 cursor-pointer select-none',
-          'bg-slate-900/40 hover:bg-slate-900/60 backdrop-blur-xl',
+          'flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed p-10 cursor-pointer transition-all duration-200',
           isDragActive
-            ? 'border-blue-500 bg-blue-500/10 shadow-[0_0_35px_rgba(59,130,246,0.35)] scale-[1.01]'
-            : 'border-white/10 hover:border-blue-500/40 hover:shadow-lg hover:shadow-blue-500/5',
-          isDragReject && 'border-rose-500 bg-rose-500/10'
+            ? 'border-blue-500/60 bg-blue-500/5'
+            : 'border-white/10 hover:border-white/20 hover:bg-white/[0.02]'
         )}
       >
         <input {...getInputProps()} />
-
-        <div className="flex flex-col items-center gap-3">
-          <div
-            className={cn(
-              'flex h-16 w-16 items-center justify-center rounded-2xl border transition-all duration-300 shadow-inner',
-              isDragActive
-                ? 'bg-blue-600 border-blue-400 text-white shadow-blue-500/50 animate-bounce'
-                : 'bg-white/5 border-white/10 text-blue-400 group-hover:scale-110'
-            )}
-          >
-            <UploadCloud className="h-8 w-8" />
-          </div>
-
-          <div className="flex flex-col gap-1">
-            <p className="text-base font-semibold text-slate-100">
-              {isDragActive ? (
-                <span className="text-blue-400">Release to drop files here</span>
-              ) : (
-                <>
-                  Drop files here or <span className="text-blue-400 underline underline-offset-4 hover:text-blue-300">click to browse</span>
-                </>
-              )}
-            </p>
-            <p className="text-xs text-slate-400">
-              Supports documents, photos, audio, video and archives up to 5GB
-            </p>
-          </div>
+        <div className="h-14 w-14 rounded-2xl bg-blue-600/10 border border-blue-500/20 flex items-center justify-center">
+          <Upload className={cn('w-7 h-7 transition-colors', isDragActive ? 'text-blue-400' : 'text-slate-500')} />
+        </div>
+        <div className="text-center">
+          <p className="text-sm font-medium text-slate-300">
+            {isDragActive ? 'Drop files here' : 'Drag & drop files, or click to browse'}
+          </p>
+          <p className="text-xs text-slate-500 mt-1">Up to {maxSizeMb}MB per file · {maxFiles} files max</p>
         </div>
       </div>
 
-      {/* Upload Queue Progress Area */}
-      {queue.length > 0 && (
-        <div className="flex flex-col gap-2 rounded-2xl border border-white/8 bg-slate-900/50 p-4 backdrop-blur-xl">
-          <div className="flex items-center justify-between pb-2 border-b border-white/5">
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-              <Sparkles className="w-3.5 h-3.5 text-blue-400" />
-              Upload Queue ({queue.length})
-            </span>
-            {completedUploads.length > 0 && (
-              <button
-                type="button"
-                onClick={clearCompleted}
-                className="text-xs text-slate-400 hover:text-slate-200 transition-colors"
-              >
-                Clear completed
-              </button>
-            )}
-          </div>
-
-          <div className="flex flex-col gap-2.5 max-h-60 overflow-y-auto pr-1">
-            {queue.map((item) => (
-              <div
-                key={item.id}
-                className="flex flex-col gap-1.5 rounded-xl border border-white/5 bg-slate-950/40 p-3"
-              >
-                <div className="flex items-center justify-between gap-3 text-xs">
-                  <div className="flex items-center gap-2 truncate">
-                    <File className="w-4 h-4 text-slate-400 shrink-0" />
-                    <span className="font-medium text-slate-200 truncate">{item.file.name}</span>
-                    <span className="text-slate-500 font-mono text-[11px] shrink-0">
-                      ({formatBytes(item.file.size)})
-                    </span>
-                  </div>
-
-                  <div className="flex items-center gap-2 shrink-0">
-                    {item.status === 'completed' && (
-                      <span className="inline-flex items-center gap-1 text-emerald-400 font-medium">
-                        <CheckCircle2 className="w-3.5 h-3.5" /> Done
-                      </span>
-                    )}
-                    {item.status === 'error' && (
-                      <span className="inline-flex items-center gap-1 text-rose-400 font-medium">
-                        <AlertCircle className="w-3.5 h-3.5" /> Failed
-                      </span>
-                    )}
-                    {item.status === 'uploading' && (
-                      <span className="text-blue-400 font-mono font-medium">
-                        {Math.round(item.progress)}%
-                      </span>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => removeFile(item.id)}
-                      className="text-slate-500 hover:text-slate-300 p-0.5 rounded"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-
-                {item.status === 'uploading' && (
-                  <Progress
-                    value={item.progress}
-                    variant="gradient"
-                    size="sm"
-                    className="w-full"
-                  />
+      {/* File Queue */}
+      {uploadQueue.length > 0 && (
+        <div className="flex flex-col gap-2 max-h-64 overflow-y-auto">
+          {uploadQueue.map(item => (
+            <div key={item.id} className="flex items-center gap-3 rounded-xl border border-white/5 bg-slate-950/40 p-3">
+              <div className="h-9 w-9 shrink-0 rounded-lg bg-slate-800 border border-white/5 flex items-center justify-center">
+                {item.status === 'done' ? (
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                ) : item.status === 'error' ? (
+                  <AlertCircle className="w-4 h-4 text-rose-400" />
+                ) : item.status === 'uploading' ? (
+                  <Loader2 className="w-4 h-4 text-blue-400 animate-spin" />
+                ) : (
+                  <FileIcon className="w-4 h-4 text-slate-500" />
                 )}
               </div>
-            ))}
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium text-slate-300 truncate">{item.file.name}</p>
+                {item.status === 'uploading' && (
+                  <Progress value={item.progress} size="sm" className="mt-1" />
+                )}
+                {item.status === 'error' && (
+                  <p className="text-[10px] text-rose-400 mt-0.5">{item.error}</p>
+                )}
+                {item.status === 'done' && (
+                  <p className="text-[10px] text-emerald-400 mt-0.5">Uploaded successfully</p>
+                )}
+              </div>
+              {item.status === 'pending' && (
+                <button type="button" onClick={() => removeFile(item.id)} className="text-slate-600 hover:text-slate-400 transition-colors shrink-0">
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Action Bar */}
+      {uploadQueue.length > 0 && (
+        <div className="flex items-center justify-between">
+          <span className="text-xs text-slate-400">
+            {doneCount > 0 && <span className="text-emerald-400">{doneCount} done</span>}
+            {pendingCount > 0 && <span className="text-slate-400"> · {pendingCount} pending</span>}
+          </span>
+          <div className="flex gap-2">
+            <Button variant="ghost" size="sm" onClick={() => setUploadQueue([])} className="text-slate-500">
+              Clear
+            </Button>
+            {pendingCount > 0 && (
+              <Button size="sm" onClick={handleStartUpload} disabled={uploading} className="shadow-lg shadow-blue-600/20">
+                {uploading ? <Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> : <Upload className="w-4 h-4 mr-1.5" />}
+                Upload {pendingCount} file{pendingCount !== 1 ? 's' : ''}
+              </Button>
+            )}
           </div>
         </div>
       )}

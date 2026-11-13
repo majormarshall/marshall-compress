@@ -15,6 +15,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Sparkles,
+  CreditCard,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useUiStore } from '@/lib/stores/ui.store';
@@ -35,6 +36,7 @@ const navItems: NavItem[] = [
   { label: 'Notes', href: '/dashboard/notes', icon: FileText },
   { label: 'Meetings', href: '/dashboard/meetings', icon: Video },
   { label: 'AI Assistant', href: '/dashboard/ai', icon: Bot, badge: 'Pro' },
+  { label: 'Billing', href: '/dashboard/billing', icon: CreditCard },
 ];
 
 export function Sidebar() {

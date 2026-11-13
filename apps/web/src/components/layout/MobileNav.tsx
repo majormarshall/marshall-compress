@@ -14,6 +14,7 @@ import {
   Settings,
   LogOut,
   Sparkles,
+  CreditCard,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useUiStore } from '@/lib/stores/ui.store';
@@ -27,6 +28,7 @@ const navItems = [
   { label: 'Notes', href: '/dashboard/notes', icon: FileText },
   { label: 'Meetings', href: '/dashboard/meetings', icon: Video },
   { label: 'AI', href: '/dashboard/ai', icon: Bot },
+  { label: 'Billing', href: '/dashboard/billing', icon: CreditCard },
 ];
 
 export function MobileNav() {

@@ -109,6 +109,8 @@ export const filesApi = {
     apiClient.post<FileItem>('/files/upload/complete', req),
   deleteFile: (fileId: string) =>
     apiClient.delete<{ success: boolean }>(`/files/${fileId}`),
+  updateFile: (fileId: string, dto: { name?: string; folderId?: string | null }) =>
+    apiClient.patch<FileItem>(`/files/${fileId}`, dto),
   getDownloadUrl: (fileId: string) =>
     apiClient.get<{ downloadUrl: string; fileName: string }>(`/files/${fileId}/download`),
 };

@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Patch,
   Delete,
   Param,
   Body,
@@ -22,6 +23,7 @@ import { FilesService } from './files.service';
 import { CreateUploadSessionDto } from './dtos/create-upload-session.dto';
 import { CompleteUploadDto } from './dtos/complete-upload.dto';
 import { ListFilesQueryDto } from './dtos/list-files-query.dto';
+import { UpdateFileDto } from './dtos/update-file.dto';
 import { SupabaseAuthGuard } from '../../common/guards/supabase-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 
@@ -84,6 +86,18 @@ export class FilesController {
     @Param('id', ParseUUIDPipe) fileId: string,
   ) {
     return this.filesService.getFile(userId, fileId);
+  }
+
+  @Patch(':id')
+  @ApiOperation({ summary: 'Update file metadata (rename or move)' })
+  @ApiParam({ name: 'id', description: 'File UUID' })
+  @SwaggerApiResponse({ status: 200, description: 'File updated successfully' })
+  async updateFile(
+    @CurrentUser('id') userId: string,
+    @Param('id', ParseUUIDPipe) fileId: string,
+    @Body() dto: UpdateFileDto,
+  ) {
+    return this.filesService.updateFile(userId, fileId, dto);
   }
 
   @Delete(':id')

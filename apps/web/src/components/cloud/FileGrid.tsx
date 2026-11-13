@@ -20,6 +20,8 @@ import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import type { FileItem, FolderItem } from '@marshall/shared';
 import { formatBytes, getMimeIcon } from './FileCard';
+import { RenameFileDialog } from './RenameFileDialog';
+import { MoveFileDialog } from './MoveFileDialog';
 
 export interface FileGridProps {
   files: FileItem[];
@@ -33,6 +35,8 @@ export function FileGrid({ files, folders, viewMode = 'grid', onFolderOpen, onRe
   const queryClient = useQueryClient();
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [fileToRename, setFileToRename] = useState<{ id: string; name: string } | null>(null);
+  const [fileToMove, setFileToMove] = useState<{ id: string; name: string; folder_id?: string | null } | null>(null);
 
   const handleDownload = async (fileId: string, fileName: string) => {
     try {
@@ -85,73 +89,78 @@ export function FileGrid({ files, folders, viewMode = 'grid', onFolderOpen, onRe
     );
   }
 
-  if (viewMode === 'list') {
-    return (
-      <div className="flex flex-col rounded-2xl border border-white/8 bg-slate-900/50 overflow-hidden">
-        {/* Folders */}
-        {folders.map(folder => (
-          <div
-            key={folder.id}
-            onClick={() => onFolderOpen?.(folder.id, folder.name)}
-            className="flex items-center justify-between px-4 py-3 hover:bg-white/[0.03] border-b border-white/5 cursor-pointer transition-colors group"
-          >
-            <div className="flex items-center gap-3">
-              <FolderIcon className="w-5 h-5 text-amber-400" />
-              <span className="text-sm text-slate-300 group-hover:text-blue-400 transition-colors">{folder.name}</span>
+  return (
+    <>
+      {viewMode === 'list' ? (
+        <div className="flex flex-col rounded-2xl border border-white/8 bg-slate-900/50 overflow-hidden">
+          {/* Folders */}
+          {folders.map(folder => (
+            <div
+              key={folder.id}
+              onClick={() => onFolderOpen?.(folder.id, folder.name)}
+              className="flex items-center justify-between px-4 py-3 hover:bg-white/[0.03] border-b border-white/5 cursor-pointer transition-colors group"
+            >
+              <div className="flex items-center gap-3">
+                <FolderIcon className="w-5 h-5 text-amber-400" />
+                <span className="text-sm text-slate-300 group-hover:text-blue-400 transition-colors">{folder.name}</span>
+              </div>
+              <Badge variant="outline" className="text-[10px]">Folder</Badge>
             </div>
-            <Badge variant="outline" className="text-[10px]">Folder</Badge>
-          </div>
-        ))}
-        {/* Files */}
-        {files.map(file => (
-          <div key={file.id} className="flex items-center justify-between px-4 py-3 hover:bg-white/[0.03] border-b border-white/5 last:border-0 transition-colors group">
-            <div className="flex items-center gap-3 min-w-0">
-              {getMimeIcon(file.mime_type, 'md')}
-              <div className="min-w-0">
-                <p className="text-sm text-slate-300 truncate group-hover:text-blue-400 transition-colors">{file.name}</p>
-                <p className="text-xs text-slate-500">{formatBytes(file.size_bytes)}</p>
+          ))}
+          {/* Files */}
+          {files.map(file => (
+            <div key={file.id} className="flex items-center justify-between px-4 py-3 hover:bg-white/[0.03] border-b border-white/5 last:border-0 transition-colors group">
+              <div className="flex items-center gap-3 min-w-0">
+                {getMimeIcon(file.mime_type, 'md')}
+                <div className="min-w-0">
+                  <p className="text-sm text-slate-300 truncate group-hover:text-blue-400 transition-colors">{file.name}</p>
+                  <p className="text-xs text-slate-500">{formatBytes(file.size_bytes)}</p>
+                </div>
+              </div>
+              <div className={cn('flex items-center gap-1 shrink-0 transition-opacity', openMenuId === file.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100')}>
+                <button type="button" onClick={() => handleDownload(file.id, file.name)} className="p-1.5 rounded-lg text-slate-500 hover:text-blue-400 hover:bg-blue-500/10 transition-colors" title="Download">
+                  <Download className="w-4 h-4" />
+                </button>
+                <DropdownMenu open={openMenuId === file.id} onOpenChange={(o) => setOpenMenuId(o ? file.id : null)}>
+                  <DropdownMenuTrigger asChild>
+                    <button type="button" className="p-1.5 rounded-lg text-slate-500 hover:text-slate-200 hover:bg-white/10 transition-colors" title="More actions">
+                      <MoreVertical className="w-4 h-4" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-44">
+                    <DropdownMenuItem onClick={() => setFileToRename({ id: file.id, name: file.name })} className="gap-2">
+                      <Pencil className="w-3.5 h-3.5" />
+                      Rename
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleCopyLink(file.id)} className="gap-2">
+                      <Copy className="w-3.5 h-3.5" />
+                      Copy link
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleCompress(file.id)} className="gap-2">
+                      <Zap className="w-3.5 h-3.5" />
+                      Compress
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setFileToMove({ id: file.id, name: file.name, folder_id: (file as any).folder_id })} className="gap-2">
+                      <FolderInput className="w-3.5 h-3.5" />
+                      Move to folder
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      onClick={() => handleDelete(file.id)}
+                      disabled={deletingId === file.id}
+                      className="gap-2 text-rose-400 focus:text-rose-400 focus:bg-rose-500/10"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      Delete
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             </div>
-            <div className={cn('flex items-center gap-1 shrink-0 transition-opacity', openMenuId === file.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100')}>
-              <button type="button" onClick={() => handleDownload(file.id, file.name)} className="p-1.5 rounded-lg text-slate-500 hover:text-blue-400 hover:bg-blue-500/10 transition-colors" title="Download">
-                <Download className="w-4 h-4" />
-              </button>
-              <DropdownMenu open={openMenuId === file.id} onOpenChange={(o) => setOpenMenuId(o ? file.id : null)}>
-                <DropdownMenuTrigger asChild>
-                  <button type="button" className="p-1.5 rounded-lg text-slate-500 hover:text-slate-200 hover:bg-white/10 transition-colors" title="More actions">
-                    <MoreVertical className="w-4 h-4" />
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-44">
-                  <DropdownMenuItem onClick={() => handleCopyLink(file.id)} className="gap-2">
-                    <Copy className="w-3.5 h-3.5" />
-                    Copy link
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleCompress(file.id)} className="gap-2">
-                    <Zap className="w-3.5 h-3.5" />
-                    Compress
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    onClick={() => handleDelete(file.id)}
-                    disabled={deletingId === file.id}
-                    className="gap-2 text-rose-400 focus:text-rose-400 focus:bg-rose-500/10"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                    Delete
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-          </div>
-        ))}
-      </div>
-    );
-  }
-
-  // Grid mode
-  return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+          ))}
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
       {/* Folders first */}
       {folders.map(folder => (
         <div
@@ -198,6 +207,10 @@ export function FileGrid({ files, folders, viewMode = 'grid', onFolderOpen, onRe
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-44">
+                <DropdownMenuItem onClick={() => setFileToRename({ id: file.id, name: file.name })} className="gap-2">
+                  <Pencil className="w-3.5 h-3.5" />
+                  Rename
+                </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => handleCopyLink(file.id)} className="gap-2">
                   <Copy className="w-3.5 h-3.5" />
                   Copy link
@@ -205,6 +218,10 @@ export function FileGrid({ files, folders, viewMode = 'grid', onFolderOpen, onRe
                 <DropdownMenuItem onClick={() => handleCompress(file.id)} className="gap-2">
                   <Zap className="w-3.5 h-3.5" />
                   Compress
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setFileToMove({ id: file.id, name: file.name, folder_id: (file as any).folder_id })} className="gap-2">
+                  <FolderInput className="w-3.5 h-3.5" />
+                  Move to folder
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
@@ -220,6 +237,30 @@ export function FileGrid({ files, folders, viewMode = 'grid', onFolderOpen, onRe
           </div>
         </div>
       ))}
-    </div>
+      </div>
+      )}
+
+      {/* Rename Dialog */}
+      <RenameFileDialog
+        isOpen={Boolean(fileToRename)}
+        onClose={() => setFileToRename(null)}
+        file={fileToRename}
+        onSuccess={() => {
+          queryClient.invalidateQueries({ queryKey: ['files'] });
+          onRefresh?.();
+        }}
+      />
+
+      {/* Move Dialog */}
+      <MoveFileDialog
+        isOpen={Boolean(fileToMove)}
+        onClose={() => setFileToMove(null)}
+        file={fileToMove}
+        onSuccess={() => {
+          queryClient.invalidateQueries({ queryKey: ['files'] });
+          onRefresh?.();
+        }}
+      />
+    </>
   );
 }

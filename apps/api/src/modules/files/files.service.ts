@@ -10,6 +10,7 @@ import { StorageService } from '../storage/storage.service';
 import { CreateUploadSessionDto } from './dtos/create-upload-session.dto';
 import { CompleteUploadDto } from './dtos/complete-upload.dto';
 import { ListFilesQueryDto } from './dtos/list-files-query.dto';
+import { UpdateFileDto } from './dtos/update-file.dto';
 import {
   FileStatus,
   FileType,
@@ -262,5 +263,62 @@ export class FilesService {
       downloadUrl,
       fileName: file.name,
     };
+  }
+
+  /**
+   * Update file metadata (rename or move to another folder)
+   */
+  async updateFile(
+    userId: string,
+    fileId: string,
+    dto: UpdateFileDto,
+  ): Promise<FileItem> {
+    await this.getFile(userId, fileId);
+
+    const updatePayload: Record<string, any> = {
+      updated_at: new Date().toISOString(),
+    };
+
+    if (dto.name !== undefined) {
+      const trimmed = dto.name.trim();
+      if (!trimmed) {
+        throw new BadRequestException('File name cannot be empty');
+      }
+      updatePayload.name = trimmed;
+    }
+
+    if (dto.folderId !== undefined) {
+      if (dto.folderId) {
+        // Verify target folder exists and belongs to user
+        const { data: folder, error } = await this.supabaseService.client
+          .from('folders')
+          .select('id')
+          .eq('id', dto.folderId)
+          .eq('user_id', userId)
+          .single();
+
+        if (error || !folder) {
+          throw new NotFoundException('Target folder not found');
+        }
+        updatePayload.folder_id = dto.folderId;
+      } else {
+        updatePayload.folder_id = null;
+      }
+    }
+
+    const { data, error } = await this.supabaseService.client
+      .from('files')
+      .update(updatePayload)
+      .eq('id', fileId)
+      .eq('user_id', userId)
+      .select('*')
+      .single();
+
+    if (error || !data) {
+      this.logger.error(`Error updating file ${fileId}: ${error?.message}`);
+      throw new BadRequestException(error?.message || 'Failed to update file');
+    }
+
+    return data as FileItem;
   }
 }

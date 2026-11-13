@@ -48,6 +48,17 @@ export function useDeleteFile() {
   });
 }
 
+export function useUpdateFile() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ fileId, dto }: { fileId: string; dto: { name?: string; folderId?: string | null } }) =>
+      filesApi.updateFile(fileId, dto),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: FILES_QUERY_KEY });
+    },
+  });
+}
+
 export const FOLDERS_QUERY_KEY = ['folders'];
 
 export function useFolders(parentId?: string | null) {

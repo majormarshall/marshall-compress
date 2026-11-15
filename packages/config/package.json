@@ -4,5 +4,8 @@
   "private": true,
   "files": [
     "tsconfig.nestjs.json"
-  ]
+  ],
+  "scripts": {
+    "build": "node -e \"process.exit(0)\""
+  }
 }

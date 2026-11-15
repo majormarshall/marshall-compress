@@ -193,6 +193,7 @@ export interface CompressionJobSettings {
   lossless?: boolean;
   targetSizeKb?: number;
   outputFormat?: string;
+  stripMetadata?: boolean;
   width?: number;
   height?: number;
   audioBitrateKbps?: number;

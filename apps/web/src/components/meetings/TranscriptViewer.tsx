@@ -63,9 +63,9 @@ export function TranscriptViewer({ transcript, speakers: customSpeakers, classNa
         if (match) {
           items.push({
             id: `line-${idx}`,
-            speaker: match[1].trim(),
+            speaker: match[1]?.trim() || 'Speaker',
             timestamp: match[2]?.trim(),
-            text: match[3].trim(),
+            text: match[3]?.trim() || '',
           });
         } else {
           items.push({
@@ -95,7 +95,7 @@ export function TranscriptViewer({ transcript, speakers: customSpeakers, classNa
     const idx = Math.abs(
       speakerName.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) % SPEAKER_COLORS.length
     );
-    return SPEAKER_COLORS[idx];
+    return SPEAKER_COLORS[idx] ?? SPEAKER_COLORS[0]!;
   };
 
   // Filter items by search query and speaker filter

@@ -9,6 +9,7 @@ import { CompressionModule } from './modules/compression/compression.module';
 import { NotesModule } from './modules/notes/notes.module';
 import { MeetingsModule } from './modules/meetings/meetings.module';
 import { AiModule } from './modules/ai/ai.module';
+import { BillingModule } from './modules/billing/billing.module';
 import configuration from './config/configuration';
 
 @Module({
@@ -32,6 +33,7 @@ import configuration from './config/configuration';
     NotesModule,
     MeetingsModule,
     AiModule,
+    BillingModule,
   ],
 })
 export class AppModule {}

@@ -1,14 +1,16 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   CreditCard, Zap, Shield, CheckCircle2, ArrowRight,
   BarChart3, HardDrive, FileArchive, MessageSquare,
-  Sparkles, Lock,
+  Sparkles, Lock, Loader2,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
+import { billingApi } from '@/lib/api/endpoints';
+import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
 /* ─── Static plan definitions ─── */
@@ -83,11 +85,38 @@ const usageItems = [
 const invoices: { date: string; amount: string; status: 'paid' | 'pending' }[] = [];
 
 export default function BillingPage() {
-  const handleUpgrade = (planId: string) => {
-    // TODO: wire to Stripe Checkout when payment integration is complete
-    // eslint-disable-next-line no-console
-    console.log('[Billing] Upgrade requested for plan:', planId);
-    alert('Stripe integration coming soon! This is a stub.');
+  const [upgradingPlan, setUpgradingPlan] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('status') === 'success') {
+      const plan = params.get('plan') || 'Pro';
+      toast.success(`🎉 Welcome to MARSHALL ${plan.toUpperCase()}! Your subscription is active.`);
+      window.history.replaceState({}, '', window.location.pathname);
+    } else if (params.get('status') === 'cancelled') {
+      toast.info('Checkout was cancelled. No charges were made.');
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, []);
+
+  const handleUpgrade = async (planId: string) => {
+    if (planId === 'free') return;
+    setUpgradingPlan(planId);
+    try {
+      const res = await billingApi.createCheckoutSession(planId);
+      if (res.url) {
+        if (res.isSimulated) {
+          toast.success(`Upgraded to ${planId.toUpperCase()} (Development Mode)`);
+        } else {
+          window.location.href = res.url;
+        }
+      }
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Failed to initiate checkout session');
+    } finally {
+      setUpgradingPlan(null);
+    }
   };
 
   return (
@@ -100,17 +129,17 @@ export default function BillingPage() {
           </div>
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-slate-100">Billing & Plans</h1>
-            <p className="text-sm text-slate-400">Manage your subscription and monitor usage.</p>
+            <p className="text-sm text-slate-400">Manage your subscription, upgrade tiers, and monitor usage.</p>
           </div>
         </div>
 
-        {/* Coming-soon banner */}
-        <div className="mt-4 flex items-center gap-3 p-4 rounded-2xl border border-amber-500/30 bg-amber-500/5">
-          <Lock className="h-5 w-5 text-amber-400 shrink-0" />
+        {/* Stripe banner */}
+        <div className="mt-4 flex items-center gap-3 p-4 rounded-2xl border border-blue-500/30 bg-blue-500/5">
+          <Sparkles className="h-5 w-5 text-blue-400 shrink-0" />
           <div>
-            <p className="text-sm font-semibold text-amber-300">Payments coming soon</p>
-            <p className="text-xs text-amber-400/70">
-              Stripe integration is in progress. Upgrading will be available shortly — your free tier is unlimited for now.
+            <p className="text-sm font-semibold text-blue-300">Secure Billing by Stripe</p>
+            <p className="text-xs text-blue-400/80">
+              Upgrade instantly with encrypted payments. Subscriptions can be managed or cancelled at any time.
             </p>
           </div>
         </div>
@@ -201,7 +230,7 @@ export default function BillingPage() {
               {/* CTA */}
               <button
                 type="button"
-                disabled={plan.ctaDisabled}
+                disabled={plan.ctaDisabled || Boolean(upgradingPlan)}
                 onClick={() => !plan.ctaDisabled && handleUpgrade(plan.id)}
                 className={cn(
                   'w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-sm font-semibold transition-all duration-200',
@@ -212,8 +241,17 @@ export default function BillingPage() {
                     : 'border border-white/10 text-slate-200 hover:bg-white/5'
                 )}
               >
-                {plan.cta}
-                {!plan.ctaDisabled && <ArrowRight className="h-3.5 w-3.5" />}
+                {upgradingPlan === plan.id ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Connecting to Stripe...
+                  </>
+                ) : (
+                  <>
+                    {plan.cta}
+                    {!plan.ctaDisabled && <ArrowRight className="h-3.5 w-3.5" />}
+                  </>
+                )}
               </button>
             </div>
           ))}

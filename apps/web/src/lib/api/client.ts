@@ -84,7 +84,7 @@ class ApiClient {
       const isJson = response.headers.get('content-type')?.includes('application/json');
 
       if (!response.ok) {
-        let errorData: Partial<ApiResponse<unknown>['error']> = {};
+        let errorData: Record<string, any> = {};
         if (isJson) {
           try {
             const json = await response.json();
@@ -105,7 +105,7 @@ class ApiClient {
         return (await response.text()) as unknown as T;
       }
 
-      const jsonResult = (await response.json()) as ApiResponse<T>;
+      const jsonResult = (await response.json()) as any;
       
       // If envelope contains success: false
       if (jsonResult && typeof jsonResult === 'object' && 'success' in jsonResult) {

@@ -36,12 +36,15 @@ export function UploadDropzone({ folderId, onComplete, maxFiles = 20, maxSizeMb 
       // Create upload session
       const session = await filesApi.createUploadSession({
         fileName: item.file.name,
-        fileSizeBytes: item.file.size,
+        sizeBytes: item.file.size,
         mimeType: item.file.type || 'application/octet-stream',
         folderId: folderId || undefined,
       });
 
       updateFile(item.id, { progress: 20 });
+
+      const targetUrl = session.presignedUrls[0] || (session as any).uploadUrl;
+      let etag = 'etag';
 
       // Upload directly to presigned URL
       const xhr = new XMLHttpRequest();
@@ -53,11 +56,15 @@ export function UploadDropzone({ folderId, onComplete, maxFiles = 20, maxSizeMb 
           }
         });
         xhr.addEventListener('load', () => {
-          if (xhr.status >= 200 && xhr.status < 300) resolve();
-          else reject(new Error(`Upload failed: ${xhr.status}`));
+          if (xhr.status >= 200 && xhr.status < 300) {
+            etag = xhr.getResponseHeader('ETag')?.replace(/"/g, '') || 'etag-1';
+            resolve();
+          } else {
+            reject(new Error(`Upload failed: ${xhr.status}`));
+          }
         });
         xhr.addEventListener('error', () => reject(new Error('Network error during upload')));
-        xhr.open('PUT', session.uploadUrl);
+        xhr.open('PUT', targetUrl);
         xhr.setRequestHeader('Content-Type', item.file.type || 'application/octet-stream');
         xhr.send(item.file);
       });
@@ -69,9 +76,10 @@ export function UploadDropzone({ folderId, onComplete, maxFiles = 20, maxSizeMb 
         uploadId: session.uploadId,
         storageKey: session.storageKey,
         fileName: item.file.name,
-        fileSizeBytes: item.file.size,
+        sizeBytes: item.file.size,
         mimeType: item.file.type || 'application/octet-stream',
         folderId: folderId || undefined,
+        parts: [{ partNumber: 1, etag }],
       });
 
       updateFile(item.id, { status: 'done', progress: 100 });

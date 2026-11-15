@@ -55,7 +55,6 @@ export function CompressJobCard({ job, onCancel, onDownload, className }: Compre
           </Badge>
         );
       case 'PENDING':
-      case 'QUEUED':
         return (
           <Badge variant="warning" dot className="bg-amber-500/15 text-amber-300 border-amber-500/25">
             PENDING

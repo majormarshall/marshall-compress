@@ -12,10 +12,10 @@ export function useCompressionJobs(params?: ListJobsParams) {
   return useQuery({
     queryKey: [...COMPRESSION_JOBS_KEY, params],
     queryFn: () => compressionApi.listJobs(params),
-    refetchInterval: (query: { state: { data?: { jobs?: CompressionJob[] } } }) => {
+    refetchInterval: (query: any) => {
       // Auto-poll if any job is currently active
-      const hasActive = query.state.data?.jobs?.some(
-        (j: CompressionJob) => j.status === 'PROCESSING' || (j.status as string) === 'QUEUED' || j.status === 'PENDING'
+      const hasActive = query?.state?.data?.jobs?.some(
+        (j: any) => j.status === 'PROCESSING' || j.status === 'PENDING'
       );
       return hasActive ? 2500 : false;
     },
@@ -66,7 +66,7 @@ export function useJobSSE(jobId?: string | null): SSEJobProgress {
   const queryClient = useQueryClient();
   const [state, setState] = useState<SSEJobProgress>({
     progress: 0,
-    status: 'PENDING',
+    status: 'PENDING' as any,
   });
 
   useEffect(() => {

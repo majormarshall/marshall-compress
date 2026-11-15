@@ -12,6 +12,8 @@ import {
   LogOut,
   Sparkles,
   ExternalLink,
+  Sun,
+  Moon,
 } from 'lucide-react';
 import { useUiStore } from '@/lib/stores/ui.store';
 import { useAuth } from '@/lib/hooks/useAuth';
@@ -37,7 +39,7 @@ const routeTitleMap: Record<string, { title: string; subtitle?: string }> = {
 
 export function Header() {
   const pathname = usePathname();
-  const { toggleMobileMenu } = useUiStore();
+  const { toggleMobileMenu, theme, toggleTheme } = useUiStore();
   const { user, signOut } = useAuth();
 
   const currentRouteInfo = routeTitleMap[pathname] || {
@@ -94,6 +96,20 @@ export function Header() {
             readOnly
           />
         </div>
+
+        {/* Theme Toggle */}
+        <button
+          onClick={toggleTheme}
+          className="p-2 rounded-xl text-slate-400 hover:text-slate-100 hover:bg-white/5 transition-colors"
+          aria-label="Toggle color theme"
+          title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+        >
+          {theme === 'dark' ? (
+            <Sun className="h-4 w-4 text-amber-400" />
+          ) : (
+            <Moon className="h-4 w-4 text-slate-300" />
+          )}
+        </button>
 
         {/* Notifications Bell */}
         <div className="relative">

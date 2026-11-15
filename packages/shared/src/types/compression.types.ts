@@ -28,6 +28,9 @@ export interface CompressionSettings {
   targetSizeKb?: number;
   outputFormat?: string;
   stripMetadata?: boolean;
+  width?: number;
+  height?: number;
+  audioBitrateKbps?: number;
 }
 
 /**

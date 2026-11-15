@@ -20,17 +20,18 @@ export function useAuth(): AuthState {
     const supabase = createClient();
 
     // Check active session on mount
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
+    supabase.auth.getSession().then((res: any) => {
+      const sess = res?.data?.session ?? null;
+      setSession(sess);
+      setUser(sess?.user ?? null);
       setLoading(false);
     });
 
     // Listen to auth changes
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
+    } = supabase.auth.onAuthStateChange((_event: any, session: any) => {
+      setSession(session ?? null);
       setUser(session?.user ?? null);
       setLoading(false);
     });

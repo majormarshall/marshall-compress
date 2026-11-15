@@ -36,7 +36,7 @@ export function CompressionSettings({
   className,
 }: CompressionSettingsProps) {
   const [selectedFileId, setSelectedFileId] = useState<string>(
-    initialSelectedFileId || (files.length > 0 ? files[0].id : '')
+    initialSelectedFileId || (files.length > 0 && files[0] ? files[0].id : '')
   );
   const [preset, setPreset] = useState<CompressionPreset>(CompressionPreset.BALANCED);
   const [quality, setQuality] = useState<number>(80);

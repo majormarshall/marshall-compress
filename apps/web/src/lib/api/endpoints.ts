@@ -72,6 +72,7 @@ export interface UpdateNoteDto {
 }
 
 export interface ListMeetingsParams {
+  search?: string;
   status?: MeetingStatus;
   provider?: MeetingProvider;
   page?: number;
@@ -176,6 +177,17 @@ export const aiApi = {
     apiClient.post<{ response: string; conversationId: string }>('/ai/chat', payload),
   getConversations: () => apiClient.get<any[]>('/ai/conversations'),
   getConversation: (id: string) => apiClient.get<any>(`/ai/conversations/${id}`),
+};
+
+export const billingApi = {
+  createCheckoutSession: (planId: string, successUrl?: string, cancelUrl?: string) =>
+    apiClient.post<{ url: string; sessionId?: string; isSimulated: boolean }>('/billing/checkout', {
+      planId,
+      successUrl,
+      cancelUrl,
+    }),
+  createPortalSession: () =>
+    apiClient.post<{ url: string }>('/billing/portal'),
 };
 
 

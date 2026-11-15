@@ -91,7 +91,7 @@ export function NoteEditor({ note, onChange, saving = false, className }: NoteEd
                   'prose prose-invert max-w-none focus:outline-none min-h-[350px] text-slate-200 leading-relaxed text-sm',
               },
             },
-            onUpdate: ({ editor: ed }) => {
+            onUpdate: ({ editor: ed }: any) => {
               const html = ed.getHTML();
               const text = ed.getText();
               const json = ed.getJSON();

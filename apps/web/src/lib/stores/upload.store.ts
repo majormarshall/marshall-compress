@@ -40,7 +40,7 @@ export const useUploadStore = create<UploadStoreState>((set) => ({
   },
   setStatus: (id: string, status: QueuedUpload['status'], error?: string, fileId?: string) => {
     set((state) => ({
-      queue: state.queue.map((item) =>
+      queue: state.queue.map((item): QueuedUpload =>
         item.id === id ? { ...item, status, error, fileId: fileId || item.fileId } : item
       ),
     }));

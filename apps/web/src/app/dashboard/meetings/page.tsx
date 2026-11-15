@@ -42,7 +42,7 @@ export default function MeetingsPage() {
     try {
       await createMeetingMutation.mutateAsync({
         title: newTitle.trim(),
-        scheduledStartTime: new Date().toISOString(),
+        scheduledAt: new Date().toISOString(),
         provider: 'GOOGLE_MEET' as any,
       });
       toast.success('Meeting registered for transcription');
@@ -79,7 +79,7 @@ export default function MeetingsPage() {
               <Video className="w-5 h-5" />
             </span>
             <h1 className="text-2xl font-bold tracking-tight text-slate-100">Meeting Intelligence</h1>
-            <Badge variant="emerald" className="ml-2">Live AI Summaries</Badge>
+            <Badge variant="success" className="ml-2">Live AI Summaries</Badge>
           </div>
           <p className="text-sm text-slate-400">
             Autonomous speaker transcription, automated takeaways, and actionable task delegation.

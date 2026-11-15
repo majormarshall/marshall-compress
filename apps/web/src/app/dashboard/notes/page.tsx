@@ -42,12 +42,12 @@ export default function NotesPage() {
 
   // Default select first note when notes load
   useEffect(() => {
-    if (!selectedNoteId && notes.length > 0) {
+    if (!selectedNoteId && notes.length > 0 && notes[0]) {
       setSelectedNoteId(notes[0].id);
     }
   }, [notes, selectedNoteId]);
 
-  const activeNote = notes.find((n) => n.id === selectedNoteId) || (notes.length > 0 ? notes[0] : null);
+  const activeNote = notes.find((n) => n.id === selectedNoteId) || (notes.length > 0 ? (notes[0] ?? null) : null);
 
   const handleCreateNote = async () => {
     try {
@@ -158,7 +158,7 @@ export default function NotesPage() {
         {/* Right Note Editor (2/3 or 8 cols) */}
         <div className="md:col-span-8 h-full">
           <NoteEditor
-            note={activeNote}
+            note={activeNote ?? null}
             onChange={handleEditorChange}
             saving={saving}
           />
